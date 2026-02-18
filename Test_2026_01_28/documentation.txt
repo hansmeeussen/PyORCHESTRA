@@ -1,0 +1,12 @@
+
+// or use a loop to vary input 
+//The variables used here should be defined above
+// A Sweep results in a given number of data points with the listed variables varied from start to end value in lin or log steps 
+Sweep{ 201
+     Swept: pH 1 13 lin
+}
+
+
+
+
+pH                       	CO2.con                  	CO3-2.con                	HCO3-.con   
