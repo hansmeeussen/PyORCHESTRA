@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: PyORCHESTRA
+Version: 1.0.1
+Summary: A test project using pybind11
+Author: Hans Meeussen
+Author-email: hans@meeussen.nl
+Requires-Python: >=3.9
+License-File: LICENSE
+Dynamic: author
+Dynamic: author-email
+Dynamic: license-file
+Dynamic: requires-python
+Dynamic: summary

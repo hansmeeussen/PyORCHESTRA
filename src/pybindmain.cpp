@@ -32,6 +32,11 @@ using namespace orchestracpp;
 //
 // Version 2025
 // Authors: Guido de Zeeuw, Casper Groot, Hans Meeussen
+//
+// Version 2026, October, Hans Meeussen
+// - added alternative single/multi set_and_calculate functions that avoid copying and creating new output vectors by passing references to numpy arrays
+//   this is much faster, especially for multithreaded large chemical systems
+// - added a function to stop the nodeprocessor including the threads that are kept alive between calls
 
 
 class ORCHESTRA {
@@ -105,6 +110,80 @@ public:
 //		};
     };
 
+
+    // This version passes references  to the input and output arrays, so no copying involved
+    // https://zingale.github.io/phy504/cxx-python-sum.html
+    //
+    void set_and_calculate_single_2(py::array_t<double>& i, py::array_t<double>& o) {
+
+        auto input = i.unchecked<1>();
+        auto output = o.mutable_unchecked<1>();
+
+        //change values based on input list
+        for (int m = 0; m < input.shape(0); m++) {
+            theNodes->at(0)->setValue(IN_index[m], input[m]);
+        };
+
+        // call the solver for the node 
+        bool success = calculator->calculate(theNodes->at(0), stopFlag);
+
+        // copy the results back from the node to the output vector
+        for (pybind11::ssize_t m = 0; m < output.shape(0); ++m) {
+            output(m) = theNodes->at(0)->getvalue(OUT_index[m]);
+        }
+    };
+
+    // This version passes references  to the input and output arrays, so no copying involved
+    // https://zingale.github.io/phy504/cxx-python-sum.html
+    //
+    void set_and_calculate_multi_2(py::array_t<double> i, int nrThreads, int memoryOption, py::array_t<double>& o), py::arg().noconvert() {
+        auto input  = i.unchecked<>();         
+        auto output = o.mutable_unchecked<>(); 
+
+      //  cout << "Input shape 0: " << input.shape(0) << " Output shape 0: " << output.shape(0) << "\n";
+      //  cout << "Input shape 1: " << input.shape(1) << " Output shape 1: " << output.shape(1) << "\n";
+      //  cout << "Nr nodes: " << theNodes->size() << " In vars " << IN_index.size() << " Out vars " << OUT_index.size() << "\n";
+
+        for (pybind11::ssize_t n = 0; n < theNodes->size(); ++n) { 
+            for (pybind11::ssize_t m = 0; m < IN_index.size(); ++m) {
+                theNodes->at(n)->setValue(IN_index[m], input(n, m));
+            }
+        }
+       
+        // we intialise the nodeprocessor only once. We should also destroy it after use!
+        if (np == NULL) {
+            cout << "C++ node processor was created, please call solver.stop() after use." << "\n";
+            np = new NodeProcessor(calculator, nrThreads, stopFlag, theNodes); // 8 threads)
+        }
+
+        // process the nodes in parallel
+        np->processNodes(theNodes, memoryOption);
+
+        for (pybind11::ssize_t n = 0; n < theNodes->size(); ++n) {
+            for (pybind11::ssize_t m = 0; m < OUT_index.size(); ++m) {
+                output(n,m) = theNodes->at(n)->getvalue(OUT_index[m]); // this line
+            }
+        }
+    };//, py::arg().noconvert());
+
+    void stop() {
+        if (np != NULL) {
+            np->pleaseStop();
+            delete np;
+        }
+        cout<<"C++ node processor was stopped." << "\n";
+
+    }
+    
+    // we should create a destructor for the following objects:
+    // Calculator* calculator;         
+    // StopFlag* stopFlag;             
+    // std::vector<Node*>* theNodes;  
+
+
+    //
+    // This methods is still here for backward compatibility.
+    // 
     py::array_t<double> set_and_calculate_single(vector<double> I_values) {
 
         // copy the input values to the node, and use the variable index for this 
@@ -120,11 +199,15 @@ public:
         vector<vector<double>> O_values(theNodes->size(), vector<double>(OUT_index.size())); //make output vector
         for (int m = 0; m < OUT_index.size(); m++) {
             O_values[0][m] = theNodes->at(0)->getvalue(OUT_index[m]);
-         };
+        };
 
         return py::cast(O_values); //return list with output values
     };
 
+
+    //
+    // This methods is still here for backward compatibility.
+    // 
 
     py::array_t<double> set_and_calculate_multi(vector<vector<double>> I_values, int nrThreads, int memoryOption) {
 
@@ -144,7 +227,6 @@ public:
         // process the nodes in parallel
         np->processNodes(theNodes, memoryOption);
 
-
         //make output vector
         vector<vector<double>> O_values(theNodes->size(), vector<double>(OUT_index.size())); //make output vector
         for (int n = 0; n < theNodes->size(); n++) {
@@ -157,10 +239,8 @@ public:
     };
 
 
-    // we should create a destructor for the following objects:
-    // Calculator* calculator;         
-    // StopFlag* stopFlag;             
-    // std::vector<Node*>* theNodes;  
+
+
 
 };
 
@@ -170,6 +250,11 @@ PYBIND11_MODULE(PyORCHESTRA, m) {
         .def(py::init<>())
         .def("initialise", &ORCHESTRA::initialise) //refer to function initialise
         .def("set_and_calculate_single", &ORCHESTRA::set_and_calculate_single)
-        .def("set_and_calculate_multi", &ORCHESTRA::set_and_calculate_multi);
+        .def("set_and_calculate_single_2", &ORCHESTRA::set_and_calculate_single_2)
+        .def("set_and_calculate_multi", &ORCHESTRA::set_and_calculate_multi)
+        .def("set_and_calculate_multi_2", &ORCHESTRA::set_and_calculate_multi_2)
+        .def("stop", &ORCHESTRA::stop);
 };
+        
+
 

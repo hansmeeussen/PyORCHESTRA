@@ -5,9 +5,9 @@ import time
 
 import PyORCHESTRA
 #-------------------------------------------------------------------------------
-# Minimalistic program to test ORCHESTRA C++ solver from Python
+# Simple program to demonstrate how to use the ORCHESTRA C++ solver from Python
 #
-# May 2025 Hans Meeussen
+# October 2026, Hans Meeussen
 #
 # The ORCHESTRA solver requires:
 #    - an input text file with  chemical model definition (substances reactions etc) (can be composed with Java GUI)
@@ -28,6 +28,9 @@ import PyORCHESTRA
 dataframeInput    = pd.read_csv('input.dat', sep=r"\s+", header=0, comment='#')
 inputVariables    = np.array(dataframeInput.columns)
 
+# Now create a np array of the input 
+#(copy=True) to avoid creating a view
+inputarray  = dataframeInput.to_numpy(dtype=np.float64, copy=True)
 
 #-------------------------------------------------------------------------------
 # 2) Define output variables
@@ -38,7 +41,8 @@ inputVariables    = np.array(dataframeInput.columns)
 
 # or read column headers from existing output datafile
 # this is similar to the way the java version works.
-# so you can add output variables by adding them to the column names in the output.dat file
+# so you can add output variables by adding them to the column names in the output.dat file!
+# This works the same way as the Java  version
 dataframeOutput = pd.read_csv('output.dat', sep=r"\s+", header=0, comment='#')
 #outputVariables = np.array(dataframeOutput.columns)
 
@@ -47,17 +51,17 @@ dataframeOutput = pd.read_csv('output.dat', sep=r"\s+", header=0, comment='#')
 outputVariables  = np.array(['pH', 'C.diss', 'CO2.con', 'CO3-2.con', 'HCO3-.con']) 
 
 
-# create empty 2d input and output data array.inputVariableNames
+# create an empty 2d output numpy array
 # in this example we use one row per calculation
-inputarray  = np.zeros((len(dataframeInput.index),len(inputVariables)))
-outputarray = np.zeros((len(dataframeInput.index),len(outputVariables)))
-
+outputarray = np.zeros((len(dataframeInput.index),len(outputVariables)), dtype=np.float64)
 
 #-------------------------------------------------------------------------------
 # 3) Initialise the solver
 #-------------------------------------------------------------------------------
-# Define number of cells/nodes, first solver has one cell
+# Define number of cells/nodes, the first solver has a single cell
 nrCells = 1
+#nrCells = nrCells = len(dataframeInput.index)
+
 
 # Define the input file with the chemistry definition, usually generated with the Java GUI
 chemistryFile = "chemistry1.inp"
@@ -71,38 +75,35 @@ solver = PyORCHESTRA.ORCHESTRA()
 # after initialisation this order is fixed!! so cannot be changed. 
 solver.initialise(chemistryFile, nrCells, inputVariables, outputVariables)
 
-
 #-------------------------------------------------------------------------------
 # 4) Call the solver for each datapoint in the input, and write the output to the output array
-#    todo: probably we can directly use dataframe as input without copying to array
 #-------------------------------------------------------------------------------
 
 # the first calculation takes extra time as it includes initialization of the calculator
-# so we can do this separately
-inputarray[0]  = np.array([np.array(dataframeInput.iloc[0,:])]).astype('float64')
-outputarray[0] = solver.set_and_calculate_single(inputarray[0])
-
-
+# so we can do this separately before we start timing
+#outputarray[0] = solver.set_and_calculate_single(inputarray[0])
+solver.set_and_calculate_single_2(inputarray[0], outputarray[0])
 
 print("starting serial calculations ...")
 tic = time.perf_counter()
-n=0
-while(n<len(dataframeInput.index)):
-    
-    # fill the input array
-    #inputarray[n]  = np.array([np.array(dataframeInput.iloc[n,:])]).astype('float64')
-    in1 = np.array(dataframeInput.iloc[n]).astype('float64')
 
-    # so the calculations are performed for a single data row at the time, although the input and output data sets are 2d matrices
-    # it will also be possible to calculate a multiple dataset in one go, using parallel processing
-    #outputarray[n] = solver.set_and_calculate_single(inputarray[n])
-#    outputarray[n] = solver.set_and_calculate_single(np.array(dataframeInput.iloc[n]))
-    outputarray[n] = solver.set_and_calculate_single(dataframeInput.iloc[n])
-    n=n+1
-    print(".", end="", flush=True)
+for i in range(1): # for benchmarking we an use a large number here
+    n=0
+    while(n<len(dataframeInput.index)):
+    
+        # outputarray[n] = solver.set_and_calculate_single(inputarray[n]) # old version
+        solver.set_and_calculate_single_2(inputarray[n], outputarray[n])
+        n=n+1
+        print(".", end="", flush=True)
+
+    # solver.set_and_calculate_multi_2(inputarray, 1, 1, outputarray)
+    # outputarray = solver.set_and_calculate_multi(inputarray, 8, 1)
 
 toc = time.perf_counter()
 print(f"This took  {toc - tic:0.4f} seconds")
+
+
+solver.stop()
 
 
 #-------------------------------------------------------------------------------
@@ -111,11 +112,13 @@ print(f"This took  {toc - tic:0.4f} seconds")
 
 # create dataframe with output data and names as output column headers
 outputdf = pd.DataFrame(outputarray, columns = outputVariables)
+#outputdf = pd.DataFrame(results, columns = outputVariables)
 
 #-------------------------------------------------------------------------------
 # 6) Write output dataframe to (tab separated) file.
 #-------------------------------------------------------------------------------
 outputdf.to_csv("output_python.dat", sep='\t',index=False)
+
 
 
 #test = dataframeOutput.compare(outputdf,keep_shape=True, keep_equal=True)
