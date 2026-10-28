@@ -60,7 +60,7 @@ outputarray = np.zeros((len(dataframeInput.index),len(outputVariables)), dtype=n
 #-------------------------------------------------------------------------------
 # Define number of cells/nodes, the first solver has a single cell
 nrCells = 1
-#nrCells = nrCells = len(dataframeInput.index)
+nrCells = nrCells = len(dataframeInput.index)
 
 
 # Define the input file with the chemistry definition, usually generated with the Java GUI
@@ -82,28 +82,28 @@ solver.initialise(chemistryFile, nrCells, inputVariables, outputVariables)
 # the first calculation takes extra time as it includes initialization of the calculator
 # so we can do this separately before we start timing
 #outputarray[0] = solver.set_and_calculate_single(inputarray[0])
-solver.set_and_calculate_single_2(inputarray[0], outputarray[0])
+solver.set_and_calculate_single_2(inputarray[5], outputarray[5])
 
 print("starting serial calculations ...")
 tic = time.perf_counter()
 
-for i in range(1): # for benchmarking we an use a large number here
+for i in range(19000): # for benchmarking we an use a large number here
     n=0
-    while(n<len(dataframeInput.index)):
+#    while(n<len(dataframeInput.index)):
     
         # outputarray[n] = solver.set_and_calculate_single(inputarray[n]) # old version
-        solver.set_and_calculate_single_2(inputarray[n], outputarray[n])
-        n=n+1
-        print(".", end="", flush=True)
+#        solver.set_and_calculate_single_2(inputarray[n], outputarray[n])
+#        n=n+1
+#        print(".", end="", flush=True)
 
-    # solver.set_and_calculate_multi_2(inputarray, 1, 1, outputarray)
-    # outputarray = solver.set_and_calculate_multi(inputarray, 8, 1)
+    solver.set_and_calculate_multi_2(inputarray, 8, 1, outputarray)
+    #outputarray = solver.set_and_calculate_multi(inputarray, 4, 1)
 
 toc = time.perf_counter()
 print(f"This took  {toc - tic:0.4f} seconds")
 
 
-solver.stop()
+#solver.stop()
 
 
 #-------------------------------------------------------------------------------

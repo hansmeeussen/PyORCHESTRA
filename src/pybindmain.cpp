@@ -36,7 +36,7 @@ using namespace orchestracpp;
 // Version 2026, October, Hans Meeussen
 // - added alternative single/multi set_and_calculate functions that avoid copying and creating new output vectors by passing references to numpy arrays
 //   this is much faster, especially for multithreaded large chemical systems
-// - added a function to stop the nodeprocessor including the threads that are kept alive between calls
+// - added a function to stop the nodeprocessor and the processing threads (that are kept alive between calls)
 
 
 class ORCHESTRA {
@@ -111,13 +111,11 @@ public:
     };
 
 
-    // This version passes references  to the input and output arrays, so no copying involved
-    // https://zingale.github.io/phy504/cxx-python-sum.html
-    //
-    void set_and_calculate_single_2(py::array_t<double>& i, py::array_t<double>& o) {
+    // This version passes references to the input and output arrays, so no copying involved
+    void set_and_calculate_single_2(py::array_t<double>& inp, py::array_t<double>& outp) {
 
-        auto input = i.unchecked<1>();
-        auto output = o.mutable_unchecked<1>();
+        auto input = inp.unchecked<1>();
+        auto output = outp.mutable_unchecked<1>();
 
         //change values based on input list
         for (int m = 0; m < input.shape(0); m++) {
@@ -133,16 +131,10 @@ public:
         }
     };
 
-    // This version passes references  to the input and output arrays, so no copying involved
-    // https://zingale.github.io/phy504/cxx-python-sum.html
-    //
-    void set_and_calculate_multi_2(py::array_t<double> i, int nrThreads, int memoryOption, py::array_t<double>& o), py::arg().noconvert() {
-        auto input  = i.unchecked<>();         
-        auto output = o.mutable_unchecked<>(); 
-
-      //  cout << "Input shape 0: " << input.shape(0) << " Output shape 0: " << output.shape(0) << "\n";
-      //  cout << "Input shape 1: " << input.shape(1) << " Output shape 1: " << output.shape(1) << "\n";
-      //  cout << "Nr nodes: " << theNodes->size() << " In vars " << IN_index.size() << " Out vars " << OUT_index.size() << "\n";
+    // This version passes references to the input and output arrays, so no copying involved
+    void set_and_calculate_multi_2(py::array_t<double> inp, int nrThreads, int memoryOption, py::array_t<double>& outp){
+        auto input  = inp.unchecked<>();         
+        auto output = outp.mutable_unchecked<>();
 
         for (pybind11::ssize_t n = 0; n < theNodes->size(); ++n) { 
             for (pybind11::ssize_t m = 0; m < IN_index.size(); ++m) {
@@ -151,9 +143,10 @@ public:
         }
        
         // we intialise the nodeprocessor only once. We should also destroy it after use!
+        // The number of threads is determined when nodeprocessor is created at the first call
         if (np == NULL) {
             cout << "C++ node processor was created, please call solver.stop() after use." << "\n";
-            np = new NodeProcessor(calculator, nrThreads, stopFlag, theNodes); // 8 threads)
+            np = new NodeProcessor(calculator, nrThreads, stopFlag, theNodes);
         }
 
         // process the nodes in parallel
@@ -161,10 +154,10 @@ public:
 
         for (pybind11::ssize_t n = 0; n < theNodes->size(); ++n) {
             for (pybind11::ssize_t m = 0; m < OUT_index.size(); ++m) {
-                output(n,m) = theNodes->at(n)->getvalue(OUT_index[m]); // this line
+                output(n,m) = theNodes->at(n)->getvalue(OUT_index[m]); 
             }
         }
-    };//, py::arg().noconvert());
+    };
 
     void stop() {
         if (np != NULL) {
